@@ -1,4 +1,4 @@
-# File        :   main.oy (fastKLT-tracker Python Version)
+# File        :   main.py (fastKLT-tracker Python Version)
 # Version     :   1.0.0
 # Description :   Implements Zana Zakaryaie's FAST-KLT tracker originally written in C++
 # Date:       :   Jan 03, 2022
@@ -501,7 +501,7 @@ while videoDevice.isOpened():
     else:
         break
 
-# When everything done, release the capture device:
+# When everything is done, release the capture device:
 videoDevice.release()
 cv2.destroyAllWindows()
 print("Video Device closed")
