@@ -3,7 +3,7 @@
 # Description :   Implements Zana Zakaryaie's FAST-KLT tracker originally written in C++
 # Date:       :   Jan 03, 2022
 # Author      :   Ricardo Acevedo-Avila
-# License     :   _Not for commercial use_
+# License     :   Creative Commons CC0
 
 import cv2
 import numpy as np
