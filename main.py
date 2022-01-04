@@ -1,13 +1,27 @@
+# File        :   main.oy (fastKLT-tracker Python Version)
+# Version     :   1.0.0
+# Description :   Implements Zana Zakaryaie's FAST-KLT tracker originally written in C++
+# Date:       :   Jan 03, 2022
+# Author      :   Ricardo Acevedo-Avila
+# License     :   _Not for commercial use_
+
 import cv2
 import numpy as np
 import heapq
 
 
 # Shows an image
-def showImage(imageName, inputImage):
+def showImage(imageName, inputImage, delay=0):
     cv2.namedWindow(imageName, cv2.WINDOW_NORMAL)
     cv2.imshow(imageName, inputImage)
-    cv2.waitKey(0)
+    cv2.waitKey(delay)
+
+
+# Writes a png image to disk:
+def writeImage(imagePath, inputImage):
+    imagePath = imagePath + ".png"
+    cv2.imwrite(imagePath, inputImage, [cv2.IMWRITE_PNG_COMPRESSION, 0])
+    print("Wrote Image: " + imagePath)
 
 
 # Rotates an array:
@@ -25,9 +39,13 @@ def rotateArray(inputArray):
 # points is a numpy array,
 # output is a rect tuple
 def boundigRect2f(points):
+    # Numpy array to list:
+    (h1, w1, c1) = points.shape
+    points = list(map(tuple, points.reshape((h1, c1))))
+
     # numpy array to list:
-    x = points[0][:, 1].tolist()
-    y = points[0][:, 0].tolist()
+    x = [tup[0] for tup in points]
+    y = [tup[1] for tup in points]
 
     minX = min(x)
     minY = min(y)
@@ -105,37 +123,8 @@ def keepStrongest(N, keypoints):
     # largest objects:
 
     if totalKeyPoints > N:
-
-        # Get the "score" attributes from all the objects:
-        objectScores = [o.response for o in keypoints]
-
-        # Create a dictionary with the index of the objects and their score.
-        # I'm using a dictionary to keep track of the largest scores and
-        # the objects that produced them:
-        objectIndices = range(totalKeyPoints)
-        objectDictionary = dict(zip(objectIndices, objectScores))
-
-        # Get the N largest objects based on score:
-        largestObjects = heapq.nlargest(N, objectScores)
-        print(largestObjects)
-
-        # Prepare the output list of objects:
-        outKeyPoints = [None] * N
-
-        # list out keys and values separately
-        key_list = list(objectDictionary.keys())
-        val_list = list(objectDictionary.values())
-
-        # Look for those objects that produced the
-        # largest score:
-        for k in range(N):
-            # Get current largest object:
-            currentLargest = largestObjects[k]
-            # Get its original position on the keypoint list:
-            position = objectScores.index(currentLargest)
-            # Index the corresponding keypoint and store it
-            # in the output list:
-            outKeyPoints[k] = keypoints[position]
+        # Get the N largest keypoints based on the "response" attribute:
+        outKeyPoints = heapq.nlargest(N, keypoints, lambda o: o.response)
 
     # Done:
     return outKeyPoints
@@ -216,28 +205,33 @@ def trackerTrack(img1, img2, points1):
     points1Out = points1
 
     # Parameters for lucas-kanade optical flow:
-    lkParams = dict(winSize=(kltWinSize, kltWinSize),
+    lkParams = dict(winSize=kltWinSize,
                     maxLevel=3,
                     criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))
 
-    # Compute the optical flow:
-    points2Out, status, _ = cv2.calcOpticalFlowPyrLK(img1, img2, points1, None, **lkParams)
+    points1 = np.float32(points1).reshape(-1, 1, 2)
+    points2Out, status, err = cv2.calcOpticalFlowPyrLK(img1, img2, points1, None, **lkParams)
+
+    # Numpy array to list:
+    (h1, w1, c1) = points2Out.shape
+    points2Out = list(map(tuple, points2Out.reshape((h1, c1))))
 
     # Mask those points that weren't correctly tracked:
     if points2Out is not None:
-        good_new = [points1Out[i] for i in range(len(points1Out)) if status[i]]
-        good_old = [points2Out[i] for i in range(len(points2Out)) if status[i]]
+        points1Out = [points1Out[i] for i in range(len(points1Out)) if status[i]]
+        points2Out = [points2Out[i] for i in range(len(points2Out)) if status[i]]
 
     # Getting rid of points for which the KLT tracking failed
     # or those who have gone outside the frame:
-    indexCorrection = 0
-    for i in range(len(status)):
-        newIndex = i - indexCorrection
-        pt = points2Out[newIndex]
-        if status[i] == 0 or pt[0] < 0 or pt[1] < 0:
-            points1Out.pop(newIndex)
-            points2Out.pop(newIndex)
-            indexCorrection = indexCorrection + 1
+    # indexCorrection = 0
+    # for i in range(len(status)):
+    #     newIndex = i - indexCorrection
+    #     pt = points2Out[newIndex]
+    #
+    #     if status[i] == 0 or pt[0] < 0 or pt[1] < 0:
+    #         points1Out.pop(newIndex)
+    #         points2Out.pop(newIndex)
+    #         indexCorrection = indexCorrection + 1
 
     # Compute the "factor"
     len1 = len(points1Out)
@@ -291,21 +285,29 @@ def initTracker(frame, object):
     (x, y, w, h) = object
 
     global prevCorners
-    prevCorners = [None] * 4
+    # prevCorners = [None] * 4
+    # Create the numpy array of 32 floats:
+    prevCorners = np.zeros(shape=(4, 2), dtype=np.float32)
     prevCorners[0] = (x, y)
     prevCorners[1] = (x + w, y)
     prevCorners[2] = (x + w, y + h)
     prevCorners[3] = (x, y + h)
 
+    prevCorners = np.expand_dims(prevCorners, axis=1)
+    # prevCorners = np.float32(prevCorners).reshape(-1, 1, 2)
+
 
 # Updates the tracker:
-def updateTracker(frame, output):
+def updateTracker(frame):
+    # Default value for output:
+    rectOutput = (int(0), int(0), int(0), int(0))
+
     global prevKeyPoints
     listLen = len(prevKeyPoints)
 
     # Check if there are enough points:
     if listLen < 10:
-        return False
+        return (False, rectOutput)
 
     # Channel check:
     (h, w, c) = frame.shape
@@ -319,8 +321,11 @@ def updateTracker(frame, output):
 
     # Few points tracked?
     if prob < 0.6:
-        return False
+        return (False, rectOutput)
 
+    # Convert lists to numpy arrays:
+    prevKeyPoints = np.float32(prevKeyPoints).reshape(-1, 1, 2)
+    currKeypoints = np.float32(currKeypoints).reshape(-1, 1, 2)
     (geometry, inliers) = cv2.estimateAffinePartial2D(prevKeyPoints, currKeypoints, None, cv2.RANSAC, ransacThresh)
 
     global prevCorners
@@ -328,12 +333,13 @@ def updateTracker(frame, output):
     if geometry is not None:
         currCorners = cv2.transform(prevCorners, geometry)
         # currCorners is a numpy array:
-        tempOutput = boundigRect2f(currCorners)
+        rectOutput = boundigRect2f(currCorners)
+        tempOutput = rectOutput
         # tempOutput is a rect tuple: (x, y, w, h)
         (ox, oy, ow, oh) = tempOutput
         # Check if wrong estimation:
         if ow < 0 or oh < 0:
-            return False
+            return (False, rectOutput)
 
         # Handle the box partially outside the frame:
         shrinkedObj = shrinkRect(tempOutput)
@@ -349,7 +355,7 @@ def updateTracker(frame, output):
         factor = intersectionArea / shrinkedObjArea
 
         if factor < 0.5:
-            return False
+            return (False, rectOutput)
         else:
             shrinkedObj = intersection
 
@@ -361,12 +367,12 @@ def updateTracker(frame, output):
         prevCorners = currCorners
 
         # Done:
-        return True
-
-    # Set the file paths and names:
+        return (True, rectOutput)
 
 
+# Set the file paths and names:
 filePath = "D://opencvImages//faceModel//"
+outPath = filePath + "out//"
 caffeConfigFile = filePath + "deploy.prototxt"
 caffeWeightsFile = filePath + "res10_300x300_ssd_iter_140000_fp16.caffemodel"
 
@@ -409,6 +415,9 @@ kltWindowSize = 11
 shrinkRatio = 0.1
 ransacThreshold = 0.9
 
+# Out variables:
+frameCounter = 0
+
 # Set tracker parameters:
 setTrackerParams(maxFeatures, (nRows, nCols), fastThreshold, shrinkRatio, (kltWindowSize, kltWindowSize),
                  ransacThreshold)
@@ -424,7 +433,7 @@ while videoDevice.isOpened():
         # Extract frame size:
         (frameHeight, frameWidth) = frame.shape[:2]
 
-        showImage("Input Frame", frame)
+        showImage("Input Frame", frame, 10)
 
         # Check detection flag:
         if doDetection:
@@ -454,7 +463,7 @@ while videoDevice.isOpened():
 
                     #  Set bounding box data to tracker:
                     # Send the frame, and the bounding rect as a tuple with (x,y,w,h)
-                    initTracker(frame, (startX, startY, endX-startX, endY-startY))
+                    initTracker(frame, (startX, startY, endX - startX, endY - startY))
 
                     # draw the bounding box of the face along with the associated
                     # probability
@@ -463,29 +472,36 @@ while videoDevice.isOpened():
                     color = (0, 0, 255)
                     cv2.rectangle(frame, (startX, startY), (endX, endY), color, 2)
                     cv2.putText(frame, text, (startX, y), cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 0, 255), 2)
-                    # Set detection flag:
-                    # doDetection = False
 
-                    showImage("Detected Face", frame)
+                    # Set detection flag:
+                    doDetection = False
+
+                    showImage("Detected Face", frame, 10)
 
         else:
 
             print("Updating Tracker...")
             # Update the tracker:
-            # status, trackedObj = updateTracker(frame)
+            status, trackedObj = updateTracker(frame)
 
-            # Draw rectangle:
+            if status:
+                # Draw rectangle:
+                (startX, startY, endX, endY) = trackedObj
+                color = (0, 255, 0)
+                cv2.rectangle(frame, (int(startX), int(startY)), (int(startX + endX), int(startY + endY)), color, 2)
+            else:
+                doDetection = True
 
-            # (startX, startY, endX, endY) = trackedObj
-            # color = (0, 255, 0)
-            # cv2.rectangle(frame, (startX, startY), (endX, endY), (0, 0, 255), 2)
+        showImage("Processed Frame", frame, 10)
 
-        showImage("Processed Frame", frame)
-
+        # Write Result:
+        # outName = outPath + "tracked-" + str(frameCounter)
+        # writeImage(outName, frame)
+        # frameCounter = frameCounter + 1
     else:
         break
 
-# When everything done, release the capture
+# When everything done, release the capture device:
 videoDevice.release()
 cv2.destroyAllWindows()
 print("Video Device closed")
