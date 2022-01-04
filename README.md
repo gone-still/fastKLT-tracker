@@ -4,4 +4,4 @@ I'm still working on the implementation. This is the tracker's current output:
 
 https://user-images.githubusercontent.com/8327505/148007760-1e32f528-9ec5-4757-8f3d-b88bf81ce6bd.mp4
 
-The algorithm first uses a caffee deep model for the initial face detection. It then extracts **FAST** keypoints from this ROI and tracks them using **KLT**. The new keypoints are used to calculate a new bounding rectangle on the new frame. The result is one initial detection and a fast, smooth tracking for new frames. Full details [here](http://imrid.net/?p=4441).
+The algorithm first uses a caffe deep model for the initial face detection. It then extracts **FAST** keypoints from this ROI and tracks them using **KLT**. The new keypoints are used to calculate a new bounding rectangle on the new frame. The result is one initial detection and a fast, smooth tracking for new frames. Full details [here](http://imrid.net/?p=4441).
