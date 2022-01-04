@@ -1,2 +1,7 @@
 # fastKLT-tracker
-Python port of Zana Zakaryaie's FAST-KLT tracker originally written in C++. 
+Python port of [Zana Zakaryaie's FAST-KLT tracker](https://github.com/zanazakaryaie/object_tracking/tree/main/fast_klt) originally written in C++. 
+I'm still working on the implementation. This is the tracker's current output:
+
+
+https://user-images.githubusercontent.com/8327505/148007760-1e32f528-9ec5-4757-8f3d-b88bf81ce6bd.mp4
+
