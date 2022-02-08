@@ -1,7 +1,7 @@
 # File        :   main.py (Example use of the fastKLT-tracker)
-# Version     :   1.0.1
+# Version     :   1.0.2
 # Description :   Implements Zana Zakaryaie's FAST-KLT tracker originally written in C++
-# Date:       :   Jan 10, 2022
+# Date:       :   Feb 07, 2022
 # Author      :   Ricardo Acevedo-Avila (racevedoaa@gmail.com)
 # License     :   Creative Commons CC0
 
@@ -105,6 +105,8 @@ while videoDevice.isOpened():
                     box = detections[0, 0, i, 3:7] * np.array([frameWidth, frameHeight, frameWidth, frameHeight])
                     (startX, startY, endX, endY) = box.astype("int")
 
+                    print((startX, startY, endX, endY))
+
                     # Set bounding box data to tracker:
                     # Send the frame, and the bounding rect as a tuple with (x,y,w,h)
                     tracker.initTracker(frame, (startX, startY, endX - startX, endY - startY))
@@ -134,13 +136,23 @@ while videoDevice.isOpened():
                 cv2.rectangle(frame, (int(startX), int(startY)), (int(startX + endX), int(startY + endY)), color, 2)
             else:
                 doDetection = True
+
         # Show the tracked face:
-        showImage("Processed Frame", frame, 10)
+        textX = 10
+        textY = 30
+        org = (textX, textY)
+        font = cv2.FONT_HERSHEY_SIMPLEX
+
+        color = (0, 255, 0)
+        frameString = "Frame: " + str(frameCounter)
+        cv2.putText(frame, frameString, org, font, 1, color, 1, cv2.LINE_AA)
+        showImage("Processed Frame", frame, 0)
 
         # Write Result:
         # outName = outPath + "tracked-" + str(frameCounter)
         # writeImage(outName, frame)
-        # frameCounter = frameCounter + 1
+
+        frameCounter += 1
     else:
         break
 

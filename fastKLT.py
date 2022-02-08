@@ -1,7 +1,7 @@
 # File        :   fastKLT.py (fastKLT-tracker Python Version)
-# Version     :   1.1.0
+# Version     :   1.1.2
 # Description :   Implements Zana Zakaryaie's FAST-KLT tracker originally written in C++
-# Date:       :   Jan 10, 2022
+# Date:       :   Feb 07, 2022
 # Author      :   Ricardo Acevedo-Avila (racevedoaa@gmail.com)
 # License     :   Creative Commons CC0
 
@@ -41,7 +41,7 @@ class FastKLT:
         # Parameters for lucas-kanade optical flow:
         self.lkParams = dict(winSize=self.kltWinSize,
                              maxLevel=3,
-                             criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 10, 0.03))
+                             criteria=(cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, 30, 0.01))
 
     # Debug info setter:
     def setVerbose(self, verbose):
@@ -263,9 +263,8 @@ class FastKLT:
         points2Out = list(map(tuple, points2Out.reshape((h1, c1))))
 
         # Mask those points that weren't correctly tracked:
-        if points2Out is not None:
-            points1Out = [points1Out[i] for i in range(len(points1Out)) if status[i]]
-            points2Out = [points2Out[i] for i in range(len(points2Out)) if status[i]]
+        points1Out = [points1Out[i] for i in range(len(points1Out)) if status[i]]
+        points2Out = [points2Out[i] for i in range(len(points2Out)) if status[i]]
 
         # Compute the probability "factor"
         len1 = len(points1Out)
