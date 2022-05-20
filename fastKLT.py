@@ -1,5 +1,5 @@
 # File        :   fastKLT.py (fastKLT-tracker Python Version)
-# Version     :   1.1.3
+# Version     :   1.1.4
 # Description :   Implements Zana Zakaryaie's FAST-KLT tracker originally written in C++
 # Date:       :   May 19, 2022
 # Author      :   Ricardo Acevedo-Avila (racevedoaa@gmail.com)
