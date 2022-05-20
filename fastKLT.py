@@ -1,13 +1,20 @@
 # File        :   fastKLT.py (fastKLT-tracker Python Version)
-# Version     :   1.1.2
+# Version     :   1.1.3
 # Description :   Implements Zana Zakaryaie's FAST-KLT tracker originally written in C++
-# Date:       :   Feb 07, 2022
+# Date:       :   May 19, 2022
 # Author      :   Ricardo Acevedo-Avila (racevedoaa@gmail.com)
 # License     :   Creative Commons CC0
 
 import numpy as np
 import cv2
 import heapq
+
+
+# Shows an image
+def showImage(imageName, inputImage, delay=0):
+    cv2.namedWindow(imageName, cv2.WINDOW_NORMAL)
+    cv2.imshow(imageName, inputImage)
+    cv2.waitKey(delay)
 
 
 class FastKLT:
@@ -32,6 +39,8 @@ class FastKLT:
 
         # Debug flag:
         self.verbose = False
+        # Show grid flag:
+        self.setGrid = False
 
         # "default" member variables:
         self.prevGrayFrame = np.zeros((1, 1, 3), np.uint8)  # empty mat/numpy array
@@ -47,6 +56,11 @@ class FastKLT:
     def setVerbose(self, verbose):
         self.verbose = verbose
         print("FastKLT(" + str(self.getTrackerId()) + ")>> Verbose set: " + str(verbose))
+
+    # Show grid setter:
+    def showGrid(self, gridFlag):
+        self.setGrid = gridFlag
+        print("FastKLT(" + str(self.getTrackerId()) + ")>> Show Grid set to: " + str(gridFlag))
 
     # Tracker ID getter:
     def getTrackerId(self):
@@ -87,6 +101,7 @@ class FastKLT:
 
         # Get total keep points:
         totalKeyPoints = len(keypoints)
+        # print("totalKeyPoints: "+str(totalKeyPoints))
 
         # Check if the total number of objects is bigger than the N requested
         # largest objects:
@@ -196,7 +211,7 @@ class FastKLT:
 
         # Crop the image using the object's dimensions:
         image = image[yObject:yObject + hObject, xObject:xObject + wObject]
-        # showImage("image 1", image)
+        # # showImage("image 1", image)
 
         gridRows = self.grid[0]  # get grid width
         gridCols = self.grid[1]  # get grid height
@@ -210,6 +225,9 @@ class FastKLT:
         # Get the image dimensions:
         (imageRows, imageCols) = image.shape[:2]
 
+        # Local image copy:
+        imageCopy = image.copy()
+
         for i in range(gridRows):
             # Compute the "row range":
             rowRange = ((i * imageRows) / gridRows, ((i + 1) * imageRows) / gridRows)
@@ -221,19 +239,30 @@ class FastKLT:
                 subImage = image[int(rowRange[0]):int(rowRange[1]), int(colRange[0]):int(colRange[1])]
                 # showImage("Subimage", subImage)
 
+                # Show the local image:
+                cv2.rectangle(imageCopy, (int(colRange[0]), int(rowRange[0])), (int(colRange[1]), int(rowRange[1])),
+                              (0, 0, 0), 1)
+                if self.setGrid:
+                    showImage("Grid", imageCopy)
+
                 # Call to FAST:
                 fast = cv2.FastFeatureDetector_create(threshold=self.fastThresh)
                 subKeyPoints = fast.detect(subImage, None)
 
-                # Let's see WTF I am doing:
-                # subImage2 = cv2.drawKeypoints(subImage, subKeyPoints, None, color=(255, 0, 0))
-                # showImage("SubKeypoints", subImage2)
-
                 # Call to keepStrongest, which keeps only the strongest keypoints computed by FAST:
                 subKeyPoints = self.keepStrongest(maxPerCell, subKeyPoints)
 
+                # Let's see WTF I am doing:
+                subImage2 = cv2.drawKeypoints(subImage, subKeyPoints, None, color=(255, 0, 0))
+                if self.setGrid:
+                    showImage("SubKeypoints", subImage2)
+
                 # Get the total subKeyPoint:
                 totalSubKeyPoints = len(subKeyPoints)
+
+                if self.verbose:
+                    print("fastKLT>> Region: " + str(i) + "," + str(j) + "-> Got: " + str(
+                        totalSubKeyPoints) + " Key Points.")
 
                 for k in range(totalSubKeyPoints):
                     # Get current subKeyPoint:
@@ -263,8 +292,30 @@ class FastKLT:
         points2Out = list(map(tuple, points2Out.reshape((h1, c1))))
 
         # Mask those points that weren't correctly tracked:
+
+        # points1Out2 = []
+        # points2Out2 = []
+        #
+        # if points2Out is not None:
+        #
+        #     for i in range(len(points2Out)):
+        #         (x, y) = points2Out[i]
+        #         s = status[i]
+        #
+        #         if s == 1:
+        #             if x > 0 and y >= 0:
+        #                 points1Out2.append(points1Out[i])
+        #                 points2Out2.append(points2Out[i])
+        #             else:
+        #                 print("got negatives")
+        #         else:
+        #             print("got invalid status")
+
         points1Out = [points1Out[i] for i in range(len(points1Out)) if status[i]]
         points2Out = [points2Out[i] for i in range(len(points2Out)) if status[i]]
+
+        # points1Out = points1Out2
+        # points2Out = points2Out2
 
         # Compute the probability "factor"
         len1 = len(points1Out)
@@ -287,9 +338,12 @@ class FastKLT:
 
         # Get total of previous keypoints:
         listLen = len(self.prevKeyPoints)
-
+        if self.verbose:
+            print("FastKLT(trackerTrack)>> Total Past Keypoints: " + str(listLen))
         # Check if there are enough points:
-        if listLen < 10:
+        if listLen < 5:
+            if self.verbose:
+                print("FastKLT(trackerTrack)>> Not enough keypoints! Got: " + str(listLen))
             return (False, rectOutput)
 
         # Channel check:
@@ -309,11 +363,17 @@ class FastKLT:
         # Convert lists to numpy arrays:
         self.prevKeyPoints = np.float32(self.prevKeyPoints).reshape(-1, 1, 2)
         currKeypoints = np.float32(currKeypoints).reshape(-1, 1, 2)
-        (geometry, inliers) = cv2.estimateAffinePartial2D(self.prevKeyPoints, currKeypoints, None, cv2.RANSAC,
-                                                          self.ransacThresh)
+
+        # self.prevKeyPoints, currKeypoints, None, cv2.RANSAC, self.ransacThresh
+        (geometry, inliers) = cv2.estimateAffinePartial2D(self.prevKeyPoints, currKeypoints, None,
+                                                          cv2.RANSAC, self.ransacThresh,
+                                                          2000, 0.99, 10)
+
+        # showImage("geo", geometry)
 
         if geometry is not None:
             currCorners = cv2.transform(self.prevCorners, geometry)
+            # # showImage("currCorners", currCorners)
             # currCorners is a numpy array:
             rectOutput = self.boundingRect2f(currCorners)
             tempOutput = rectOutput
